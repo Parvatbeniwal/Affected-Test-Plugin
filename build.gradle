@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.your'
-version = '1.0-SNAPSHOT'
+version = '0.0.1'
 
 repositories {
     mavenCentral()
@@ -19,7 +19,6 @@ dependencies {
     }
     implementation 'org.jetbrains:annotations:24.0.1'
     compileOnly 'com.jetbrains:ideaIC:2023.2.6'
-     //JUnit 5 dependencies
     testRuntimeOnly "org.junit.vintage:junit-vintage-engine:5.7.0"
     testImplementation 'junit:junit:4.13.2'
 }
@@ -27,7 +26,7 @@ dependencies {
 intellij {
     version.set '2023.2.6'
     type.set 'IC' // Target IDE Platform
-    plugins = ['java','junit']
+    plugins = ['java', 'junit']
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -48,4 +47,19 @@ signPlugin {
 
 publishPlugin {
     token = System.getenv('PUBLISH_TOKEN')
+}
+
+// Define the custom Jar task
+task createPluginJar(type: Jar) {
+    archiveBaseName.set('Affected Unit tests runner')
+    archiveVersion.set('0.0.1')
+    from sourceSets.main.output
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    manifest {
+        attributes 'Main-Class': 'com.your.MainClass' // This is not usually needed for an IntelliJ plugin
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

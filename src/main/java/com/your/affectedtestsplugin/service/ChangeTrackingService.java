@@ -20,9 +20,9 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.your.affectedtestsplugin.runner.IntelliJTestRunner;
-import com.your.affectedtestsplugin.custom.PrivateMethodUsageFinder;
 import com.your.affectedtestsplugin.custom.CustomUtil;
+import com.your.affectedtestsplugin.custom.PrivateMethodUsageFinder;
+import com.your.affectedtestsplugin.runner.IntelliJTestRunner;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
@@ -48,9 +48,9 @@ import java.util.concurrent.CountDownLatch;
 @Service(Service.Level.PROJECT)
 public final class ChangeTrackingService {
 
-    private static final Logger logger = Logger.getInstance(ChangeTrackingService.class);
+    private static final Logger LOG = Logger.getInstance(ChangeTrackingService.class);
     private final Project project;
-    private final List<String> CHANGES = new ArrayList<>();
+    private final Set<String> CHANGES = new HashSet<>();
     private final Map<String, Integer> AFFECTED_METHODS = new HashMap<>();
     private final Set<PsiMethod> PRIVATE_METHODS = new HashSet<>();
     private final Set<PsiMethod> PUBLIC_METHOD_TESTS = new HashSet<>();
@@ -83,18 +83,22 @@ public final class ChangeTrackingService {
                 if (file != null) {
                     identifyChangedMethodsByComparing(file);
                 } else {
-                    logger.info("File is null");
+                    CustomUtil.showErrorDialog(project,"No file are changed","NO CHANGES RECOGNIZED");
+                    LOG.info("File is null");
                 }
             }
         }
-        if(CHANGES.isEmpty()){
-            CustomUtil.showErrorDialog(project,"No changes are made to project! Make valid changes","No changes");
-        }
+
+        CustomUtil.displayFlow(project,"Changed Methods",CHANGES,null);
+
+
         //DFS Traversal to get Usages
         findMethodUsages(maxDepth);
 
         //Getting the affected methods
         gettingAffectedTests();
+
+        CustomUtil.displayFlow(project,"Affected Tests",null,ALL_AFFECTED_TESTS);
     }
 
 
@@ -107,15 +111,14 @@ public final class ChangeTrackingService {
         final String sourceFilePath = file.getPath();
 
         String className = CustomUtil.getClassNameFromFilePath(sourceFilePath);
-
         // Get old and new content of the file
-        String oldContent = getFileContent(file, this::getOldFileContent);
-        String newContent = getFileContent(file, this::getNewFileContent);
+        final String oldContent = getFileContent(file, this::getOldFileContent);
+        final String newContent = getFileContent(file, this::getNewFileContent);
 
         if (oldContent != null) {
             compareFileContents(oldContent, newContent, className);
         } else {
-            logger.info("Past Commit Content is null");
+            LOG.info("Past Commit Content is null");
         }
     }
 
@@ -131,7 +134,7 @@ public final class ChangeTrackingService {
             return contentRetriever.retrieve(file);
         } catch (IOException | RuntimeException e) {
             String message = e instanceof IOException ? "OLD" : "NEW";
-            logger.info("Cannot get " + message + " file content");
+            LOG.info("Cannot get " + message + " file content");
             return ""; //To handle if a completely new file is added Otherwise put null
         }
     }
@@ -144,10 +147,10 @@ public final class ChangeTrackingService {
      * @param className  The name of the class containing the methods.
      */
     private void compareFileContents(String oldContent, String newContent, String className) {
-        JavaParser parser = new JavaParser();
+        final JavaParser parser = new JavaParser();
 
-        CompilationUnit oldCompilationUnit = parseContent(parser, oldContent);
-        CompilationUnit newCompilationUnit = parseContent(parser, newContent);
+        final CompilationUnit oldCompilationUnit = parseContent(parser, oldContent);
+        final CompilationUnit newCompilationUnit = parseContent(parser, newContent);
 
         // Compare methods
         compareMethods(oldCompilationUnit, newCompilationUnit, className);
@@ -180,14 +183,14 @@ public final class ChangeTrackingService {
      * @throws IOException If an I/O error occurs.
      */
     private String getOldFileContent(VirtualFile file) throws IOException {
-        String projectBasePath = project.getBasePath();
+        final String projectBasePath = project.getBasePath();
         if (projectBasePath == null) {
-            logger.info("Project's base path is null");
+            LOG.info("Project's base path is null");
             throw new IOException("Project's base path is null");
         }
 
-        String relativeFilePath = CustomUtil.getRelativeFilePath(file, projectBasePath);
-        File repoDir = new File(projectBasePath);
+        final String relativeFilePath = CustomUtil.getRelativeFilePath(file, projectBasePath);
+        final File repoDir = new File(projectBasePath);
 
         try (Git git = Git.open(repoDir)) {
             Repository repository = git.getRepository();
@@ -205,7 +208,7 @@ public final class ChangeTrackingService {
      * @throws IOException If the HEAD commit cannot be resolved.
      */
     private ObjectId resolveHead(Repository repository) throws IOException {
-        ObjectId headId = repository.resolve("HEAD");
+        final ObjectId headId = repository.resolve("HEAD");
         if (headId == null) {
             throw new IOException("Couldn't resolve HEAD");
         }
@@ -223,8 +226,8 @@ public final class ChangeTrackingService {
      */
     private String getFileContentFromHeadCommit(Repository repository, ObjectId headId, String relativeFilePath) throws IOException {
         try (RevWalk revWalk = new RevWalk(repository)) {
-            RevCommit headCommit = revWalk.parseCommit(headId);
-            ObjectId treeId = headCommit.getTree().getId();
+            final RevCommit headCommit = revWalk.parseCommit(headId);
+            final ObjectId treeId = headCommit.getTree().getId();
 
             return findFileContentInTree(repository, treeId, relativeFilePath);
         }
@@ -246,7 +249,7 @@ public final class ChangeTrackingService {
             treeWalk.setFilter(PathFilter.create(relativeFilePath));
 
             while (treeWalk.next()) {
-                String path = treeWalk.getPathString();
+                final String path = treeWalk.getPathString();
                 if (path.equals(relativeFilePath)) {
                     return getFileContentFromObjectId(repository, treeWalk.getObjectId(0));
                 }
@@ -283,7 +286,7 @@ public final class ChangeTrackingService {
             byte[] content = file.contentsToByteArray();
             return new String(content);
         } catch (IOException e) {
-            logger.info("Error reading new file content");
+            LOG.info("Error reading new file content");
             throw new RuntimeException("Error reading new file content", e);
         }
     }
@@ -301,8 +304,8 @@ public final class ChangeTrackingService {
             return;
         }
 
-        Map<String, MethodDeclaration> oldMethodsMap = extractMethodsToMap(oldCompilationUnit, className);
-        List<MethodDeclaration> newMethods = extractMethods(newCompilationUnit);
+        final Map<String, MethodDeclaration> oldMethodsMap = extractMethodsToMap(oldCompilationUnit, className);
+        final List<MethodDeclaration> newMethods = extractMethods(newCompilationUnit);
         for (MethodDeclaration newMethod : newMethods) {
             String methodSignature = CustomUtil.getSignOfMethodDeclaration(newMethod, className);
             if (!oldMethodsMap.containsKey(methodSignature)) {
@@ -328,10 +331,10 @@ public final class ChangeTrackingService {
      */
     private void logCompilationUnitStatus(CompilationUnit oldCompilationUnit, CompilationUnit newCompilationUnit) {
         if (oldCompilationUnit == null) {
-            logger.info("Getting Old Compilation as null");
+            LOG.info("Getting Old Compilation as null");
         }
         if (newCompilationUnit == null) {
-            logger.info("Getting New Compilation as null");
+            LOG.info("Getting New Compilation as null");
         }
     }
 
@@ -512,7 +515,7 @@ public final class ChangeTrackingService {
      */
     public void runTestsOnHeadCommitFiles(CountDownLatch latch) {
         if (!ALL_AFFECTED_TESTS.isEmpty()) {
-            IntelliJTestRunner.runTests(project, ALL_AFFECTED_TESTS,latch);
+            IntelliJTestRunner.runTests(project, ALL_AFFECTED_TESTS, latch);
         } else {
             CustomUtil.showErrorDialog(project,"No test are affected by the changes","No Test affected");
         }
@@ -522,11 +525,11 @@ public final class ChangeTrackingService {
      * Calls for the running tests for the un-stashed files (with the changes)
      */
     public void runTestsOnCurrentState() {
+        gettingAffectedTests();
         if (!ALL_AFFECTED_TESTS.isEmpty()) {
             IntelliJTestRunner.runTestsForPrevious(project, ALL_AFFECTED_TESTS);
         } else {
             CustomUtil.showErrorDialog(project,"No test are affected by the changes","No Test affected");
-
         }
     }
 
@@ -542,7 +545,8 @@ public final class ChangeTrackingService {
             // Run tests on HEAD commit files
             runTestsOnHeadCommitFiles(latch);
         } catch (Exception e) {
-            CustomUtil.showErrorDialog(project,"Error in stashed file running","First Run error");
+            LOG.info(e.getMessage());
+            CustomUtil.showErrorDialog(project,"Error in stashed file running: " + e.getMessage(),"First Run error");
         }
     }
 }

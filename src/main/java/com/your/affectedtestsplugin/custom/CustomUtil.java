@@ -12,6 +12,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Utility class for various operations related to method signatures, class names, and PsiElements.
@@ -211,12 +212,12 @@ public class CustomUtil {
      *
      * @param project the current project
      */
-    public static void displayNotification(Project project) {
+    public static void displayNotification(Project project,String title,String content) {
         final NotificationGroup notificationGroup = NotificationGroupManager.getInstance().getNotificationGroup("CustomNotifications");
         if (notificationGroup != null) {
             final Notification notification = notificationGroup.createNotification(
-                    "Change tracking",
-                    "Tracking changes and finding method usages",
+                    title.toUpperCase(),
+                    content,
                     NotificationType.INFORMATION
             );
             Notifications.Bus.notify(notification, project);
@@ -234,5 +235,30 @@ public class CustomUtil {
      */
     public static void showErrorDialog(Project project, String message, String title) {
         Messages.showErrorDialog(project, message, title);
+    }
+
+    /**
+     * Pops up a notification showing user the changes and affected tests
+     * @param project   the current project
+     * @param title     the title of notification
+     * @param changes   the set of changed methods
+     * @param affected  the set of affected tests
+     */
+    public static void displayFlow(Project project, String title, Set<String> changes, Set<PsiMethod> affected){
+        StringBuilder changesLog = new StringBuilder();
+        int count=0;
+        if(changes!=null){
+            for(String method: changes){
+                String temp=(++count)+") "+method+"     \n";
+                changesLog.append(temp);
+            }
+        }
+        else{
+            for(PsiMethod method: affected){
+                String temp=(++count)+") "+method.getName()+"     \n";
+                changesLog.append(temp);
+            }
+        }
+        CustomUtil.displayNotification(project, title,String.valueOf(changesLog));
     }
 }

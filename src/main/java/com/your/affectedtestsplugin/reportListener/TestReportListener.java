@@ -58,9 +58,7 @@ public class TestReportListener extends TestStatusListener {
 
             if (current.isLeaf()) {
                 String result = current.isPassed() ? "PASSED" : "FAILED";
-                if ("FAILED".equals(result)) {
-                    writer.write(current + ": " + result + "\n");
-                }
+                writer.write(current + ": " + result + "\n");
             }
 
             for (AbstractTestProxy child : current.getChildren()) {

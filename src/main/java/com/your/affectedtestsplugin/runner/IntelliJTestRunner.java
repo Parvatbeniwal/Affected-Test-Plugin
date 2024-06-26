@@ -18,12 +18,14 @@ import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.testframework.TestSearchScope;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
@@ -31,7 +33,8 @@ import java.util.concurrent.CountDownLatch;
  * Utility class for running JUnit tests within an IntelliJ project.
  */
 public class IntelliJTestRunner {
-
+    private static final Logger logger = Logger.getInstance(IntelliJTestRunner.class);
+    private static final LinkedHashSet<String> TEST_PATTERNS=new LinkedHashSet<>();
     /**
      * Runs the specified set of JUnit test methods within the given IntelliJ project.
      *
@@ -40,7 +43,7 @@ public class IntelliJTestRunner {
      * @param latch       The CountDownLatch to synchronize the test run completion.
      */
     public static void runTests(Project project, Set<PsiMethod> testMethods, CountDownLatch latch) {
-        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods);
+        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationNoChange");
         ExecutionEnvironment environment = buildExecutionEnvironment(settings, latch);
         ApplicationManager.getApplication().invokeLater(() -> startRunProfile(project, environment, latch));
     }
@@ -52,7 +55,7 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to be run.
      */
     public static void runTestsForPrevious(Project project, Set<PsiMethod> testMethods) {
-        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods);
+        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationChanges");
         ExecutionUtil.runConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance());
     }
 
@@ -63,15 +66,20 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to be included in the configuration.
      * @return The created RunnerAndConfigurationSettings.
      */
-    private static RunnerAndConfigurationSettings createTestConfiguration(Project project, Set<PsiMethod> testMethods) {
-        RunManager runManager = RunManager.getInstance(project);
-        ConfigurationType junitConfigType = ConfigurationTypeUtil.findConfigurationType(JUnitConfigurationType.class);
-        ConfigurationFactory junitConfigFactory = junitConfigType.getConfigurationFactories()[0];
+    private static RunnerAndConfigurationSettings createTestConfiguration(Project project, Set<PsiMethod> testMethods,String configName) {
+        final RunManager runManager = RunManager.getInstance(project);
+        final ConfigurationType junitConfigType = ConfigurationTypeUtil.findConfigurationType(JUnitConfigurationType.class);
+        ConfigurationFactory junitConfigFactory=null;
+        try{
+            junitConfigFactory = junitConfigType.getConfigurationFactories()[0];
+        }catch(NullPointerException e){
+            logger.info("Null pointer exception raised by junitConfiguration: "+ e.getMessage());
+        }
 
-        RunnerAndConfigurationSettings settings = runManager.createConfiguration("RunAffectedTestConfiguration", junitConfigFactory);
-        JUnitConfiguration configuration = (JUnitConfiguration) settings.getConfiguration();
+        final RunnerAndConfigurationSettings settings = runManager.createConfiguration(configName, Objects.requireNonNull(junitConfigFactory));
+        final JUnitConfiguration configuration = (JUnitConfiguration) settings.getConfiguration();
 
-        ApplicationManager.getApplication().runReadAction(() -> setupTestConfigurationData(configuration, testMethods));
+        ApplicationManager.getApplication().runReadAction(() -> setupTestConfigurationData(configuration, testMethods,configName));
         configuration.setWorkingDirectory(project.getBasePath());
 
         runManager.addConfiguration(settings);
@@ -86,10 +94,13 @@ public class IntelliJTestRunner {
      * @param configuration The JUnit configuration to set up.
      * @param testMethods   The set of test methods to be run.
      */
-    private static void setupTestConfigurationData(JUnitConfiguration configuration, Set<PsiMethod> testMethods) {
-        JUnitConfiguration.Data data = configuration.getPersistentData();
+    private static void setupTestConfigurationData(JUnitConfiguration configuration, Set<PsiMethod> testMethods,String configName) {
+        final JUnitConfiguration.Data data = configuration.getPersistentData();
         data.TEST_OBJECT = JUnitConfiguration.TEST_PATTERN;
-        data.setPatterns(collectMethodPatterns(testMethods));
+
+        collectMethodPatterns(testMethods);
+
+        data.setPatterns(TEST_PATTERNS);
         data.setScope(TestSearchScope.WHOLE_PROJECT);
     }
 
@@ -97,21 +108,23 @@ public class IntelliJTestRunner {
      * Collects method patterns from the given set of test methods.
      *
      * @param testMethods The set of test methods to collect patterns from.
-     * @return A LinkedHashSet of method patterns.
      */
-    private static LinkedHashSet<String> collectMethodPatterns(Set<PsiMethod> testMethods) {
-        LinkedHashSet<String> methodPatterns = new LinkedHashSet<>();
+    private static void collectMethodPatterns(Set<PsiMethod> testMethods) {
+        if(!TEST_PATTERNS.isEmpty()) {
+            return;
+        }
+
         for (PsiMethod method : testMethods) {
             PsiClass psiClass = method.getContainingClass();
-            if (psiClass != null) {
-                String className = psiClass.getQualifiedName();
-                String methodName = method.getName();
-                if (className != null) {
-                    methodPatterns.add(className + "," + methodName);
-                }
+            if (psiClass == null) {
+                continue;
+            }
+            final String className = psiClass.getQualifiedName();
+            final String methodName = method.getName();
+            if (className != null) {
+                TEST_PATTERNS.add(className + "," + methodName);
             }
         }
-        return methodPatterns;
     }
 
     /**
@@ -149,17 +162,20 @@ public class IntelliJTestRunner {
                                 latch.countDown(); // Release the latch when the process terminates
                             }
                         });
-                        return new RunContentDescriptor(handler.getExecutionConsole(), handler.getProcessHandler(), handler.getExecutionConsole().getComponent(), "Run Tests");
+                        return new RunContentDescriptor(handler.getExecutionConsole(), handler.getProcessHandler(),
+                                handler.getExecutionConsole().getComponent(), "Run Tests");
                     } else {
                         latch.countDown(); // Release the latch if the process handler is null
                         throw new ExecutionException("Failed to start the run configuration.");
                     }
                 } catch (ExecutionException e) {
+                    logger.info(e.getMessage());
                     latch.countDown(); // Ensure latch is released in case of exception
                     throw e;
                 }
             });
         } catch (ExecutionException e) {
+            logger.info(e.getMessage());
             throw new RuntimeException(e);
         }
     }

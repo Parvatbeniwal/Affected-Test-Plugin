@@ -1,5 +1,7 @@
 package com.your.affectedtestsplugin;
 
+import org.junit.Assert;
+import org.junit.Test;
 
 public class MyPlugTest {
 
