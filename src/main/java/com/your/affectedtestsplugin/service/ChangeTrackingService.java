@@ -10,7 +10,6 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
-import com.intellij.openapi.vcs.changes.LocalChangeList;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiMethod;
@@ -20,8 +19,8 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.your.affectedtestsplugin.custom.CustomUtil;
-import com.your.affectedtestsplugin.custom.PrivateMethodUsageFinder;
+import com.your.affectedtestsplugin.helperandutils.CustomUtil;
+import com.your.affectedtestsplugin.helperandutils.PrivateMethodUsageFinder;
 import com.your.affectedtestsplugin.runner.IntelliJTestRunner;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
@@ -31,6 +30,7 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -47,7 +47,7 @@ import java.util.concurrent.CountDownLatch;
  */
 @Service(Service.Level.PROJECT)
 public final class ChangeTrackingService {
-
+    private final IntelliJTestRunner runner;
     private static final Logger LOG = Logger.getInstance(ChangeTrackingService.class);
     private final Project project;
     private final Set<String> CHANGES = new HashSet<>();
@@ -63,6 +63,7 @@ public final class ChangeTrackingService {
      */
     public ChangeTrackingService(Project project) {
         this.project = project;
+        this.runner=new IntelliJTestRunner();
     }
 
     /**
@@ -70,37 +71,58 @@ public final class ChangeTrackingService {
      *
      * @param maxDepth The maximum depth for method usage search.
      */
-    public synchronized void trackChangesAndRunTests(int maxDepth) {
+    public synchronized boolean trackChangesAndTests(int maxDepth) {
         final ChangeListManager changeListManager = ChangeListManager.getInstance(project);
 
         // Get the list of local changes
-        final List<LocalChangeList> changes = changeListManager.getChangeLists();
+        final @NotNull Collection<Change> changes = changeListManager.getAllChanges();
+
+        if(changes.isEmpty()) {
+            LOG.info("File is null");
+            CustomUtil.showErrorDialog(project,"No file are changed","NO CHANGES RECOGNIZED");
+            return false ;
+        }
 
         // Iterate over changes and process them
-        for (LocalChangeList changeList : changes) {
-            for (Change change : changeList.getChanges()) {
-                VirtualFile file = change.getVirtualFile();
-                if (file != null) {
-                    identifyChangedMethodsByComparing(file);
-                } else {
-                    CustomUtil.showErrorDialog(project,"No file are changed","NO CHANGES RECOGNIZED");
-                    LOG.info("File is null");
-                }
+        for (Change change : changes) {
+            VirtualFile file = change.getVirtualFile();
+            if (file != null) {
+                identifyChangedMethodsByComparing(file);
+            } else {
+                return false;
             }
         }
 
         CustomUtil.displayFlow(project,"Changed Methods",CHANGES,null);
-
-
         //DFS Traversal to get Usages
         findMethodUsages(maxDepth);
 
         //Getting the affected methods
         gettingAffectedTests();
 
+        if(ALL_AFFECTED_TESTS.isEmpty()) {
+            LOG.info("No Tests Affected");
+            CustomUtil.showErrorDialog(project,"No Tests are affected","NO TESTS RECOGNIZED");
+            return false;
+        }
+
         CustomUtil.displayFlow(project,"Affected Tests",null,ALL_AFFECTED_TESTS);
+
+        //clearing unwanted cache
+        clearCache();
+
+        return true;
     }
 
+    /**
+     * Clearing the unwanted cache so that plugin could rerun
+     */
+    private void clearCache(){
+        CHANGES.clear();
+        AFFECTED_METHODS.clear();
+        PRIVATE_METHODS.clear();
+        PUBLIC_METHOD_TESTS.clear();
+    }
 
     /**
      * Updates the list of changed methods by comparing the old and new versions of a given file.
@@ -414,16 +436,15 @@ public final class ChangeTrackingService {
         PsiShortNamesCache shortNamesCache = PsiShortNamesCache.getInstance(project);
 
         String methodName = CustomUtil.extractMethodName(callingMethod);
-        String className = CustomUtil.extractClassName(callingMethod);
         String[] parameterTypes = CustomUtil.extractParameterTypes(callingMethod);
         PsiMethod[] psiMethods = shortNamesCache.getMethodsByName(methodName, scope);
         for (PsiMethod method : psiMethods) {
+            String className= Objects.requireNonNull(method.getContainingClass()).getName();
             if (CustomUtil.isMatchingParameters(method, parameterTypes)) {
                 addMethodToRelevantSets(method);
                 gettingReferences(method,scope,className,maxDepth,currentDepth,currentPath);
             }
         }
-
         currentPath.remove(callingMethod);
     }
 
@@ -504,6 +525,7 @@ public final class ChangeTrackingService {
      * Makes up the set of all affected tests by the changes
      */
     public void gettingAffectedTests() {
+        ALL_AFFECTED_TESTS.clear();
         Set<PsiMethod> privateUsages = PrivateMethodUsageFinder.findPrivateMethodUsages(project, PRIVATE_METHODS);
         ALL_AFFECTED_TESTS.addAll(PUBLIC_METHOD_TESTS);
         ALL_AFFECTED_TESTS.addAll(privateUsages);
@@ -515,7 +537,7 @@ public final class ChangeTrackingService {
      */
     public void runTestsOnHeadCommitFiles(CountDownLatch latch) {
         if (!ALL_AFFECTED_TESTS.isEmpty()) {
-            IntelliJTestRunner.runTests(project, ALL_AFFECTED_TESTS, latch);
+            runner.runTests(project, ALL_AFFECTED_TESTS, latch);
         } else {
             CustomUtil.showErrorDialog(project,"No test are affected by the changes","No Test affected");
         }
@@ -525,9 +547,8 @@ public final class ChangeTrackingService {
      * Calls for the running tests for the un-stashed files (with the changes)
      */
     public void runTestsOnCurrentState() {
-        gettingAffectedTests();
         if (!ALL_AFFECTED_TESTS.isEmpty()) {
-            IntelliJTestRunner.runTestsForPrevious(project, ALL_AFFECTED_TESTS);
+            runner.runTestsForPrevious(project, ALL_AFFECTED_TESTS);
         } else {
             CustomUtil.showErrorDialog(project,"No test are affected by the changes","No Test affected");
         }

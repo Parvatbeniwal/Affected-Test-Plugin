@@ -1,4 +1,4 @@
-package com.your.affectedtestsplugin.custom;
+package com.your.affectedtestsplugin.helperandutils;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiElement;
@@ -20,7 +20,7 @@ public class PrivateMethodUsageFinder {
     /**
      * Finds test methods that use the given set of private methods within a project.
      *
-     * @param project       The project in which to search for private method usages.
+     * @param project        The project in which to search for private method usages.
      * @param privateMethods The set of private methods to find usages for.
      * @return A set of PsiMethods representing the test methods that use the private methods.
      */

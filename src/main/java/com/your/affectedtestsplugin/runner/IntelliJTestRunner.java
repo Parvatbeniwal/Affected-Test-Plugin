@@ -34,7 +34,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class IntelliJTestRunner {
     private static final Logger logger = Logger.getInstance(IntelliJTestRunner.class);
-    private static final LinkedHashSet<String> TEST_PATTERNS=new LinkedHashSet<>();
+    public static final LinkedHashSet<String> TEST_PATTERNS=new LinkedHashSet<>();
     /**
      * Runs the specified set of JUnit test methods within the given IntelliJ project.
      *
@@ -42,7 +42,7 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to be run.
      * @param latch       The CountDownLatch to synchronize the test run completion.
      */
-    public static void runTests(Project project, Set<PsiMethod> testMethods, CountDownLatch latch) {
+    public void runTests(Project project, Set<PsiMethod> testMethods, CountDownLatch latch) {
         RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationNoChange");
         ExecutionEnvironment environment = buildExecutionEnvironment(settings, latch);
         ApplicationManager.getApplication().invokeLater(() -> startRunProfile(project, environment, latch));
@@ -54,7 +54,7 @@ public class IntelliJTestRunner {
      * @param project     The IntelliJ project in which to run the tests.
      * @param testMethods The set of test methods to be run.
      */
-    public static void runTestsForPrevious(Project project, Set<PsiMethod> testMethods) {
+    public void runTestsForPrevious(Project project, Set<PsiMethod> testMethods) {
         RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationChanges");
         ExecutionUtil.runConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance());
     }
@@ -66,7 +66,7 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to be included in the configuration.
      * @return The created RunnerAndConfigurationSettings.
      */
-    private static RunnerAndConfigurationSettings createTestConfiguration(Project project, Set<PsiMethod> testMethods,String configName) {
+    private RunnerAndConfigurationSettings createTestConfiguration(Project project, Set<PsiMethod> testMethods,String configName) {
         final RunManager runManager = RunManager.getInstance(project);
         final ConfigurationType junitConfigType = ConfigurationTypeUtil.findConfigurationType(JUnitConfigurationType.class);
         ConfigurationFactory junitConfigFactory=null;
@@ -79,7 +79,7 @@ public class IntelliJTestRunner {
         final RunnerAndConfigurationSettings settings = runManager.createConfiguration(configName, Objects.requireNonNull(junitConfigFactory));
         final JUnitConfiguration configuration = (JUnitConfiguration) settings.getConfiguration();
 
-        ApplicationManager.getApplication().runReadAction(() -> setupTestConfigurationData(configuration, testMethods,configName));
+        ApplicationManager.getApplication().runReadAction(() -> setupTestConfigurationData(configuration, testMethods));
         configuration.setWorkingDirectory(project.getBasePath());
 
         runManager.addConfiguration(settings);
@@ -94,12 +94,10 @@ public class IntelliJTestRunner {
      * @param configuration The JUnit configuration to set up.
      * @param testMethods   The set of test methods to be run.
      */
-    private static void setupTestConfigurationData(JUnitConfiguration configuration, Set<PsiMethod> testMethods,String configName) {
+    private void setupTestConfigurationData(JUnitConfiguration configuration, Set<PsiMethod> testMethods) {
         final JUnitConfiguration.Data data = configuration.getPersistentData();
         data.TEST_OBJECT = JUnitConfiguration.TEST_PATTERN;
-
         collectMethodPatterns(testMethods);
-
         data.setPatterns(TEST_PATTERNS);
         data.setScope(TestSearchScope.WHOLE_PROJECT);
     }
@@ -109,7 +107,7 @@ public class IntelliJTestRunner {
      *
      * @param testMethods The set of test methods to collect patterns from.
      */
-    private static void collectMethodPatterns(Set<PsiMethod> testMethods) {
+    private void collectMethodPatterns(Set<PsiMethod> testMethods) {
         if(!TEST_PATTERNS.isEmpty()) {
             return;
         }

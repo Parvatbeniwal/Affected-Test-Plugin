@@ -1,4 +1,4 @@
-package com.your.affectedtestsplugin.custom;
+package com.your.affectedtestsplugin.helperandutils;
 
 import com.intellij.openapi.ui.DialogWrapper;
 import org.jetbrains.annotations.Nullable;

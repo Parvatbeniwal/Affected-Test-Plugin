@@ -23,5 +23,6 @@
         <notificationGroup id="CustomNotifications" displayType="BALLOON" />
         <testStatusListener implementation="com.your.affectedtestsplugin.reportListener.TestReportListener"/>
     </extensions>
+
 </idea-plugin>
 

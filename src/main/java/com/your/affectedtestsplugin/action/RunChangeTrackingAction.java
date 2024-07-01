@@ -8,12 +8,15 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
-import com.your.affectedtestsplugin.custom.CustomDialog;
-import com.your.affectedtestsplugin.custom.CustomUtil;
+import com.intellij.openapi.util.IconLoader;
+import com.your.affectedtestsplugin.helperandutils.CustomDialog;
+import com.your.affectedtestsplugin.helperandutils.CustomUtil;
+import com.your.affectedtestsplugin.runner.IntelliJTestRunner;
 import com.your.affectedtestsplugin.service.ChangeTrackingService;
 import org.eclipse.jgit.api.Git;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.*;
 import java.io.File;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
@@ -24,13 +27,16 @@ import static org.apache.commons.lang.BooleanUtils.isFalse;
  * An action to track code changes and run tests on the current state and optionally on the previous commit.
  */
 public class RunChangeTrackingAction extends AnAction {
+    private static final Icon ICON = IconLoader.getIcon("/META-INF/pluginIcon.svg");
     private static final Logger logger = Logger.getInstance(RunChangeTrackingAction.class);
-
+    public RunChangeTrackingAction() {
+        super("Run Affected Tests From Changes", "Tracks the changes and run the tests affected with feature of getting the conditions of tests before changes", ICON);
+    }
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         final Project project = e.getProject();
         if (project != null) {
-            CustomUtil.displayNotification(project,"Affected Tests Plugin",
+            CustomUtil.displayNotification(project, "Affected Tests Plugin",
                     "The plugin begins. If you click the check previous option, then the report generated first will be of unchanged files.");
             handleUserInputAndRunTasks(project);
         } else {
@@ -50,9 +56,13 @@ public class RunChangeTrackingAction extends AnAction {
             boolean checkPrevious = dialog.isCheckPreviousCommit();
             if (isValidInput(input)) {
                 int depth = Integer.parseInt(input);
-                startChangeTrackingTask(project, depth, checkPrevious);
+                //Getting the affected tests
+                final ChangeTrackingService changeTrackingService = project.getService(ChangeTrackingService.class);
+                boolean next=changeTrackingService.trackChangesAndTests(depth);
+                if(!next) return;
+                startChangeTrackingTask(project, checkPrevious);
             } else {
-                CustomUtil.showErrorDialog(project, "Depth level input is required and must be a valid number.", "Invalid Input");
+                CustomUtil.showErrorDialog(project, "Depth level input is required and must be a valid number greater than 0. Starting with 1 as depth.", "Invalid Input");
             }
         }
     }
@@ -79,13 +89,9 @@ public class RunChangeTrackingAction extends AnAction {
      * Starts the background task for change tracking.
      *
      * @param project       the current project
-     * @param depth         the depth level for tracking changes
      * @param checkPrevious flag to indicate if tests on the previous commit should be run
      */
-    private void startChangeTrackingTask(Project project, int depth, boolean checkPrevious) {
-        final ChangeTrackingService changeTrackingService = project.getService(ChangeTrackingService.class);
-        changeTrackingService.trackChangesAndRunTests(depth);
-
+    private void startChangeTrackingTask(Project project, boolean checkPrevious) {
         CountDownLatch latch = new CountDownLatch(1);
 
         Task.Backgroundable task = new Task.Backgroundable(project, "Running change tracking") {
@@ -105,12 +111,14 @@ public class RunChangeTrackingAction extends AnAction {
      * @param latch         the latch to synchronize tasks
      */
     private void runChangeTracking(Project project, boolean checkPrevious, CountDownLatch latch) {
-
+        IntelliJTestRunner.TEST_PATTERNS.clear();
+        //Stashing changes and running the tests
         checkPreviousCommitTests(project, checkPrevious, latch);
+        //releasing the thread for further execution
         awaitLatch(project, latch);
-
+        //Unstashing the changes back
         applyStash(project, checkPrevious);
-
+        //Running the tests with changes
         trackChangesAndNotify(project);
     }
 

@@ -1,6 +1,9 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     id 'java'
     id 'org.jetbrains.intellij' version '1.17.3'
+    id 'org.jetbrains.kotlin.jvm'
 }
 
 group = 'com.your'
@@ -21,6 +24,7 @@ dependencies {
     compileOnly 'com.jetbrains:ideaIC:2023.2.6'
     testRuntimeOnly "org.junit.vintage:junit-vintage-engine:5.7.0"
     testImplementation 'junit:junit:4.13.2'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 }
 
 intellij {
@@ -32,6 +36,12 @@ intellij {
 tasks.withType(JavaCompile).configureEach {
     sourceCompatibility = '17'
     targetCompatibility = '17'
+}
+
+tasks.withType(KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = '17'
+    }
 }
 
 patchPluginXml {
@@ -51,7 +61,7 @@ publishPlugin {
 
 // Define the custom Jar task
 task createPluginJar(type: Jar) {
-    archiveBaseName.set('Affected Unit tests runner')
+    archiveBaseName.set('Affected Unit tests runner Optimized')
     archiveVersion.set('0.0.1')
     from sourceSets.main.output
     dependsOn configurations.runtimeClasspath
@@ -62,4 +72,7 @@ task createPluginJar(type: Jar) {
         attributes 'Main-Class': 'com.your.MainClass' // This is not usually needed for an IntelliJ plugin
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+kotlin {
+    jvmToolchain(20)
 }

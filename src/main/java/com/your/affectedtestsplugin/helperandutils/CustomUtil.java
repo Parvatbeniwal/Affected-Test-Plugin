@@ -1,9 +1,10 @@
-package com.your.affectedtestsplugin.custom;
+package com.your.affectedtestsplugin.helperandutils;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.intellij.notification.*;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -22,22 +23,22 @@ public class CustomUtil {
     /**
      * Generates the signature of a method declaration given its signature and class name.
      *
-     * @param method The method.
+     * @param method    The method.
      * @param className The name of the class declaring the method.
      * @return The full signature of the method in the format "className.signature".
      */
     public static String getSignOfMethodDeclaration(MethodDeclaration method, String className) {
-        NodeList<Parameter> list=method.getParameters();
-        StringBuilder parameterList= new StringBuilder("(");
-        for(int i=0;i<list.size();i++){
+        NodeList<Parameter> list = method.getParameters();
+        StringBuilder parameterList = new StringBuilder("(");
+        for (int i = 0; i < list.size(); i++) {
             Parameter para = list.get(i);
             parameterList.append(para.getType().asString());
-            if(i!= list.size()-1){
+            if (i != list.size() - 1) {
                 parameterList.append(',');
             }
         }
         parameterList.append(')');
-        return className + "." + method.getName().asString()+parameterList;
+        return className + "." + method.getName().asString() + parameterList;
     }
 
     /**
@@ -142,7 +143,7 @@ public class CustomUtil {
     /**
      * Checks if the parameter types of a given PsiMethod match the specified parameter types.
      *
-     * @param method The PsiMethod to be checked.
+     * @param method         The PsiMethod to be checked.
      * @param parameterTypes The expected parameter types.
      * @return True if the parameter types match, false otherwise.
      */
@@ -152,25 +153,11 @@ public class CustomUtil {
             return false;
         }
         for (int i = 0; i < parameters.length; i++) {
-            if (!parameters[i].getType().getPresentableText().replaceAll("\\s+","").equals(parameterTypes[i].replaceAll("\\s+",""))) {
+            if (!parameters[i].getType().getPresentableText().replaceAll("\\s+", "").equals(parameterTypes[i].replaceAll("\\s+", ""))) {
                 return false;
             }
         }
         return true;
-    }
-
-    /**
-     * Extracts the class name from a given method signature.
-     *
-     * @param methodSignature The full method signature.
-     * @return The extracted class name.
-     */
-    public static String extractClassName(String methodSignature) {
-        int lastDotIndex = methodSignature.lastIndexOf('.');
-        if (lastDotIndex != -1) {
-            return methodSignature.substring(0, lastDotIndex);
-        }
-        return "";
     }
 
     /**
@@ -186,10 +173,11 @@ public class CustomUtil {
 
     /**
      * Extracts ClassName from File path
+     *
      * @param sourceFilePath The path of file
      * @return The className as String
      */
-    public static String getClassNameFromFilePath(String sourceFilePath){
+    public static String getClassNameFromFilePath(String sourceFilePath) {
         int lastInd = sourceFilePath.lastIndexOf('.');
         int startInd = sourceFilePath.lastIndexOf('/');
         return sourceFilePath.substring(startInd + 1, lastInd);
@@ -198,7 +186,7 @@ public class CustomUtil {
     /**
      * Converts the absolute file path to a relative file path based on the project base path.
      *
-     * @param file The virtual file.
+     * @param file            The virtual file.
      * @param projectBasePath The base path of the project.
      * @return The relative file path.
      */
@@ -212,7 +200,7 @@ public class CustomUtil {
      *
      * @param project the current project
      */
-    public static void displayNotification(Project project,String title,String content) {
+    public static void displayNotification(Project project, String title, String content) {
         final NotificationGroup notificationGroup = NotificationGroupManager.getInstance().getNotificationGroup("CustomNotifications");
         if (notificationGroup != null) {
             final Notification notification = notificationGroup.createNotification(
@@ -233,32 +221,35 @@ public class CustomUtil {
      * @param message the error message
      * @param title   the dialog title
      */
-    public static void showErrorDialog(Project project, String message, String title) {
-        Messages.showErrorDialog(project, message, title);
+    public static void showErrorDialog(Project project, String message, String title) throws RuntimeException{
+        ApplicationManager.getApplication().invokeLater(()->{
+            Messages.showErrorDialog(project, message, title);
+            throw new RuntimeException();
+        });
     }
 
     /**
      * Pops up a notification showing user the changes and affected tests
-     * @param project   the current project
-     * @param title     the title of notification
-     * @param changes   the set of changed methods
-     * @param affected  the set of affected tests
+     *
+     * @param project  the current project
+     * @param title    the title of notification
+     * @param changes  the set of changed methods
+     * @param affected the set of affected tests
      */
-    public static void displayFlow(Project project, String title, Set<String> changes, Set<PsiMethod> affected){
+    public static void displayFlow(Project project, String title, Set<String> changes, Set<PsiMethod> affected) {
         StringBuilder changesLog = new StringBuilder();
-        int count=0;
-        if(changes!=null){
-            for(String method: changes){
-                String temp=(++count)+") "+method+"     \n";
+        int count = 0;
+        if (changes != null) {
+            for (String method : changes) {
+                String temp = (++count) + ") " + method + "     \n";
+                changesLog.append(temp);
+            }
+        } else {
+            for (PsiMethod method : affected) {
+                String temp = (++count) + ") " + method.getName() + "     \n";
                 changesLog.append(temp);
             }
         }
-        else{
-            for(PsiMethod method: affected){
-                String temp=(++count)+") "+method.getName()+"     \n";
-                changesLog.append(temp);
-            }
-        }
-        CustomUtil.displayNotification(project, title,String.valueOf(changesLog));
+        CustomUtil.displayNotification(project, title, String.valueOf(changesLog));
     }
 }
