@@ -23,6 +23,7 @@ import com.your.affectedtestsplugin.helperandutils.CustomUtil;
 import com.your.affectedtestsplugin.helperandutils.PrivateMethodUsageFinder;
 import com.your.affectedtestsplugin.runner.IntelliJTestRunner;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.Repository;
@@ -106,8 +107,6 @@ public final class ChangeTrackingService {
             return false;
         }
 
-        CustomUtil.displayFlow(project,"Affected Tests",null,ALL_AFFECTED_TESTS);
-
         //clearing unwanted cache
         clearCache();
 
@@ -134,8 +133,8 @@ public final class ChangeTrackingService {
 
         String className = CustomUtil.getClassNameFromFilePath(sourceFilePath);
         // Get old and new content of the file
-        final String oldContent = getFileContent(file, this::getOldFileContent);
         final String newContent = getFileContent(file, this::getNewFileContent);
+        final String oldContent = getFileContent(file, this::getOldFileContent);
 
         if (oldContent != null) {
             compareFileContents(oldContent, newContent, className);
@@ -215,9 +214,12 @@ public final class ChangeTrackingService {
         final File repoDir = new File(projectBasePath);
 
         try (Git git = Git.open(repoDir)) {
+            git.fetch().call();
             Repository repository = git.getRepository();
             ObjectId headId = resolveHead(repository);
             return getFileContentFromHeadCommit(repository, headId, relativeFilePath);
+        } catch (GitAPIException e) {
+            throw new RuntimeException(e);
         }
     }
 

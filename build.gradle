@@ -61,7 +61,7 @@ publishPlugin {
 
 // Define the custom Jar task
 task createPluginJar(type: Jar) {
-    archiveBaseName.set('Affected Unit tests runner Optimized')
+    archiveBaseName.set('Affected Unit tests runner final')
     archiveVersion.set('0.0.1')
     from sourceSets.main.output
     dependsOn configurations.runtimeClasspath
@@ -73,6 +73,7 @@ task createPluginJar(type: Jar) {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
 kotlin {
     jvmToolchain(20)
 }

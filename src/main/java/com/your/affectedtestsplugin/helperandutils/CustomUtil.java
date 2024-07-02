@@ -49,14 +49,11 @@ public class CustomUtil {
      */
     public static String findDeclaringClassName(PsiElement element) {
         PsiReference reference = element.getReference();
-        if (reference != null) {
-            PsiElement resolvedElement = reference.resolve();
-            if (resolvedElement != null) {
-                PsiClass declaringClass = PsiTreeUtil.getParentOfType(resolvedElement, PsiClass.class);
-                if (declaringClass != null) {
-                    return declaringClass.getName();
-                }
-            }
+        if (reference == null) return null;
+        PsiElement resolvedElement = reference.resolve();
+        if (resolvedElement != null) {
+            PsiClass declaringClass = PsiTreeUtil.getParentOfType(resolvedElement, PsiClass.class);
+            if (declaringClass != null) return declaringClass.getName();
         }
         return null;
     }

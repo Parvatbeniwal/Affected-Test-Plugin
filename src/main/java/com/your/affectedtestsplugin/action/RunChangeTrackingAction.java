@@ -21,17 +21,20 @@ import java.io.File;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
-import static org.apache.commons.lang.BooleanUtils.isFalse;
-
 /**
  * An action to track code changes and run tests on the current state and optionally on the previous commit.
  */
 public class RunChangeTrackingAction extends AnAction {
-    private static final Icon ICON = IconLoader.getIcon("/META-INF/pluginIcon.svg");
+    private static final Icon ICON = IconLoader.getIcon("/META-INF/pluginIcon.svg", RunChangeTrackingAction.class);
     private static final Logger logger = Logger.getInstance(RunChangeTrackingAction.class);
     public RunChangeTrackingAction() {
         super("Run Affected Tests From Changes", "Tracks the changes and run the tests affected with feature of getting the conditions of tests before changes", ICON);
     }
+
+    /**
+     * Invokes the action performed by the plugin when we get an action event by the user like a click on plugin option
+     * @param e the action event made by the user
+     */
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         final Project project = e.getProject();
@@ -59,7 +62,8 @@ public class RunChangeTrackingAction extends AnAction {
                 //Getting the affected tests
                 final ChangeTrackingService changeTrackingService = project.getService(ChangeTrackingService.class);
                 boolean next=changeTrackingService.trackChangesAndTests(depth);
-                if(!next) return;
+                if(!next) return; // in case of no changes or affected tests.
+
                 startChangeTrackingTask(project, checkPrevious);
             } else {
                 CustomUtil.showErrorDialog(project, "Depth level input is required and must be a valid number greater than 0. Starting with 1 as depth.", "Invalid Input");
@@ -144,7 +148,7 @@ public class RunChangeTrackingAction extends AnAction {
      * @param project the current project
      */
     private void applyStash(Project project, boolean checkPrevious) {
-        if (isFalse(checkPrevious)) {
+        if (!checkPrevious) {
             return;
         }
 
