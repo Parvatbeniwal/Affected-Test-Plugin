@@ -52,15 +52,12 @@ public class TestReportListener extends TestStatusListener {
     private void generateReport(AbstractTestProxy root, FileWriter writer) throws IOException {
         Stack<AbstractTestProxy> stack = new Stack<>();
         stack.push(root);
-
         while (!stack.isEmpty()) {
             AbstractTestProxy current = stack.pop();
-
             if (current.isLeaf()) {
                 String result = current.isPassed() ? "PASSED" : "FAILED";
                 writer.write(current + ": " + result + "\n");
             }
-
             for (AbstractTestProxy child : current.getChildren()) {
                 stack.push(child);
             }

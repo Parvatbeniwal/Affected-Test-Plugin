@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'com.your'
-version = '0.0.1'
+version = '0.0.2'
 
 repositories {
     mavenCentral()
@@ -60,9 +60,9 @@ publishPlugin {
 }
 
 // Define the custom Jar task
-task createPluginJar(type: Jar) {
-    archiveBaseName.set('Affected Unit tests runner final')
-    archiveVersion.set('0.0.1')
+tasks.register('createPluginJar', Jar) {
+    archiveBaseName.set('Affected tests demo-graph check')
+    archiveVersion.set('0.0.4')
     from sourceSets.main.output
     dependsOn configurations.runtimeClasspath
     from {

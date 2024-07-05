@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.your.affectedtestsplugin</id>
     <name>Affected Unit Test Runner</name>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
     <vendor>Deekshant Bansal</vendor>
     <description>
         An IntelliJ plugin to identify and run modified/dependent unit tests based on local changes.

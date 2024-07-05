@@ -164,8 +164,11 @@ public class CustomUtil {
      * @return True if the method is annotated with @Test, false otherwise.
      */
     public static boolean isTestMethod(PsiMethod method) {
-        PsiAnnotation testAnnotation = method.getAnnotation("org.junit.jupiter.api.Test");
-        return testAnnotation != null;
+        String Junit5 = "org.junit.jupiter.api.Test";
+        String Junit4 = "org.junit.Test";
+        PsiAnnotation testAnnotation1 = method.getAnnotation(Junit5);
+        PsiAnnotation testAnnotation2 = method.getAnnotation(Junit4);
+        return (testAnnotation1 != null) || (testAnnotation2 != null);
     }
 
     /**
@@ -248,5 +251,19 @@ public class CustomUtil {
             }
         }
         CustomUtil.displayNotification(project, title, String.valueOf(changesLog));
+    }
+
+    /**
+     * Extracts the class name from a given method signature.
+     *
+     * @param methodSignature The full method signature.
+     * @return The extracted class name.
+     */
+    public static String extractClassName(String methodSignature) {
+        int lastDotIndex = methodSignature.lastIndexOf('.');
+        if (lastDotIndex != -1) {
+            return methodSignature.substring(0, lastDotIndex);
+        }
+        return "";
     }
 }

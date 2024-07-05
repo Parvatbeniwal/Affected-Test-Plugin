@@ -45,7 +45,7 @@ public class IntelliJTestRunner {
     public void runTests(Project project, Set<PsiMethod> testMethods, CountDownLatch latch) {
         RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationNoChange");
         ExecutionEnvironment environment = buildExecutionEnvironment(settings, latch);
-        ApplicationManager.getApplication().invokeLater(() -> startRunProfile(project, environment, latch));
+        ApplicationManager.getApplication().invokeLater(() -> startingRunProfile(project, environment, latch));
     }
 
     /**
@@ -148,7 +148,7 @@ public class IntelliJTestRunner {
      * @param environment The ExecutionEnvironment.
      * @param latch       The CountDownLatch to synchronize the test run completion.
      */
-    private static void startRunProfile(Project project, ExecutionEnvironment environment, CountDownLatch latch) {
+    private static void startingRunProfile(Project project, ExecutionEnvironment environment, CountDownLatch latch) {
         try {
             ExecutionManager.getInstance(project).startRunProfile(environment, state -> {
                 try {

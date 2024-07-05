@@ -11,10 +11,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiModifier;
-import com.intellij.psi.PsiReference;
+import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
 import com.intellij.psi.search.searches.ReferencesSearch;
@@ -71,6 +68,7 @@ public final class ChangeTrackingService {
      * Tracks changes in the project files and identifies affected methods.
      *
      * @param maxDepth The maximum depth for method usage search.
+     * @return True if no error is detected
      */
     public synchronized boolean trackChangesAndTests(int maxDepth) {
         final ChangeListManager changeListManager = ChangeListManager.getInstance(project);
@@ -100,7 +98,6 @@ public final class ChangeTrackingService {
 
         //Getting the affected methods
         gettingAffectedTests();
-
         if(ALL_AFFECTED_TESTS.isEmpty()) {
             LOG.info("No Tests Affected");
             CustomUtil.showErrorDialog(project,"No Tests are affected","NO TESTS RECOGNIZED");
@@ -209,7 +206,6 @@ public final class ChangeTrackingService {
             LOG.info("Project's base path is null");
             throw new IOException("Project's base path is null");
         }
-
         final String relativeFilePath = CustomUtil.getRelativeFilePath(file, projectBasePath);
         final File repoDir = new File(projectBasePath);
 
@@ -222,7 +218,6 @@ public final class ChangeTrackingService {
             throw new RuntimeException(e);
         }
     }
-
 
     /**
      * Resolves the HEAD commit object ID.
@@ -252,7 +247,6 @@ public final class ChangeTrackingService {
         try (RevWalk revWalk = new RevWalk(repository)) {
             final RevCommit headCommit = revWalk.parseCommit(headId);
             final ObjectId treeId = headCommit.getTree().getId();
-
             return findFileContentInTree(repository, treeId, relativeFilePath);
         }
     }
@@ -438,15 +432,21 @@ public final class ChangeTrackingService {
         PsiShortNamesCache shortNamesCache = PsiShortNamesCache.getInstance(project);
 
         String methodName = CustomUtil.extractMethodName(callingMethod);
+        String changeClass = CustomUtil.extractClassName(callingMethod);
         String[] parameterTypes = CustomUtil.extractParameterTypes(callingMethod);
-        PsiMethod[] psiMethods = shortNamesCache.getMethodsByName(methodName, scope);
-        for (PsiMethod method : psiMethods) {
-            String className= Objects.requireNonNull(method.getContainingClass()).getName();
-            if (CustomUtil.isMatchingParameters(method, parameterTypes)) {
-                addMethodToRelevantSets(method);
-                gettingReferences(method,scope,className,maxDepth,currentDepth,currentPath);
+        PsiClass[] psiClasses = shortNamesCache.getClassesByName(changeClass,scope);
+
+        for(PsiClass psiClass:psiClasses){
+            PsiMethod[] methods=psiClass.getAllMethods();
+            for(PsiMethod method:methods){
+                String className= Objects.requireNonNull(method.getContainingClass()).getName();
+                if (method.getName().equals(methodName) && CustomUtil.isMatchingParameters(method, parameterTypes)) {
+                    addMethodToRelevantSets(method);
+                    gettingReferences(method,scope,className,maxDepth,currentDepth,currentPath);
+                }
             }
         }
+
         currentPath.remove(callingMethod);
     }
 
