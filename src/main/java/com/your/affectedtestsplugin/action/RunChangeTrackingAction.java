@@ -27,12 +27,14 @@ import java.util.concurrent.CountDownLatch;
 public class RunChangeTrackingAction extends AnAction {
     private static final Icon ICON = IconLoader.getIcon("/META-INF/pluginIcon.svg", RunChangeTrackingAction.class);
     private static final Logger logger = Logger.getInstance(RunChangeTrackingAction.class);
+
     public RunChangeTrackingAction() {
         super("Run Affected Tests From Changes", "Tracks the changes and run the tests affected with feature of getting the conditions of tests before changes", ICON);
     }
 
     /**
      * Invokes the action performed by the plugin when we get an action event by the user like a click on plugin option
+     *
      * @param e the action event made by the user
      */
     @Override
@@ -54,20 +56,27 @@ public class RunChangeTrackingAction extends AnAction {
      */
     private void handleUserInputAndRunTasks(Project project) {
         CustomDialog dialog = new CustomDialog();
-        if (dialog.showAndGet()) {
-            String input = dialog.getDepth();
-            boolean checkPrevious = dialog.isCheckPreviousCommit();
-            if (isValidInput(input)) {
-                int depth = Integer.parseInt(input);
-                //Getting the affected tests
-                final ChangeTrackingService changeTrackingService = project.getService(ChangeTrackingService.class);
-                boolean next=changeTrackingService.trackChangesAndTests(depth);
-                if(!next) return; // in case of no changes or affected tests.
-
-                startChangeTrackingTask(project, checkPrevious);
-            } else {
-                CustomUtil.showErrorDialog(project, "Depth level input is required and must be a valid number greater than 0. Starting with 1 as depth.", "Invalid Input");
+        try {
+            if (dialog.showAndGet()) {
+                String input = dialog.getDepth();
+                boolean checkPrevious = dialog.isCheckPreviousCommit();
+                if (isValidInput(input)) {
+                    int depth = Integer.parseInt(input);
+                    //Getting the affected tests
+                    final ChangeTrackingService changeTrackingService = project.getService(ChangeTrackingService.class);
+                    boolean next = changeTrackingService.trackChangesAndTests(depth);
+                    if (!next) {
+                        return;
+                    }// in case of no changes or affected tests.
+                    startChangeTrackingTask(project, checkPrevious);
+                } else {
+                    CustomUtil.showErrorDialog(project, "Depth level input is required and must be a valid number greater than 0. Starting with 1 as depth.", "Invalid Input");
+                }
             }
+        }
+        catch (Exception eX){
+            logger.error("Error Unit Test Finder", eX);
+            CustomUtil.displayNotification(project, "Error Occurred while Running", eX.getMessage() + " " + eX.getStackTrace());
         }
     }
 

@@ -36,7 +36,7 @@ public class PrivateMethodUsageFinder {
 
         for (String methodName : privateMethodNames.keySet()) {
             TextOccurenceProcessor processor = (element, offsetInElement) -> {
-                searchingCondition(element,methodName,testMethodsUsingPrivateMethods);
+                searchingCondition(element, methodName, testMethodsUsingPrivateMethods);
                 return true; // Continue searching
             };
             searchHelper.processElementsWithWord(processor, searchScope, methodName, UsageSearchContext.IN_STRINGS, true);
@@ -46,12 +46,13 @@ public class PrivateMethodUsageFinder {
 
     /**
      * Provides the searching conditions for the methods
-     * @param element                           PsiElement to search for the method
-     * @param methodName                        Method's name to search
-     * @param testMethodsUsingPrivateMethods    Set of private methods affected tests
+     *
+     * @param element                        PsiElement to search for the method
+     * @param methodName                     Method's name to search
+     * @param testMethodsUsingPrivateMethods Set of private methods affected tests
      */
-    private static void searchingCondition(PsiElement element,String methodName,Set<PsiMethod> testMethodsUsingPrivateMethods){
-        if (element.getText().contains(methodName)) {
+    private static void searchingCondition(PsiElement element, String methodName, Set<PsiMethod> testMethodsUsingPrivateMethods) {
+        if (element != null && element.getText().contains(methodName)) {
             PsiElement parent = element.getParent();
             if (parent instanceof PsiMethod psiMethod && CustomUtil.isTestMethod(psiMethod)) {
                 testMethodsUsingPrivateMethods.add(psiMethod);

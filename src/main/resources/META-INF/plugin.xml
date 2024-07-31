@@ -15,14 +15,14 @@
         <action id="com.your.affectedtestsplugin.action.RunChangeTrackingAction"
                 class="com.your.affectedtestsplugin.action.RunChangeTrackingAction"
                 text="Run Affected Tests From Changes"
-                description="Tracks the changes and run the tests affected with feature of getting the conditions of tests before changes">
+                description="Tracks the changes and runs the tests affected with the feature of getting the conditions of tests before changes">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>
+
     <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="CustomNotifications" displayType="BALLOON" />
+        <projectService serviceImplementation="com.your.affectedtestsplugin.service.ChangeTrackingService"/>
+        <notificationGroup id="CustomNotifications" displayType="BALLOON"/>
         <testStatusListener implementation="com.your.affectedtestsplugin.reportListener.TestReportListener"/>
     </extensions>
-
 </idea-plugin>
-

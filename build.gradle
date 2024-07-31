@@ -21,14 +21,14 @@ dependencies {
         exclude group: 'org.slf4j', module: 'slf4j-log4j12'
     }
     implementation 'org.jetbrains:annotations:24.0.1'
-    compileOnly 'com.jetbrains:ideaIC:2023.2.6'
+    compileOnly 'com.jetbrains:ideaIC:2024.1.4'
     testRuntimeOnly "org.junit.vintage:junit-vintage-engine:5.7.0"
     testImplementation 'junit:junit:4.13.2'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 }
 
 intellij {
-    version.set '2023.2.6'
+    version.set '2024.1.4'
     type.set 'IC' // Target IDE Platform
     plugins = ['java', 'junit']
 }
@@ -75,5 +75,5 @@ tasks.register('createPluginJar', Jar) {
 }
 
 kotlin {
-    jvmToolchain(20)
+    jvmToolchain(17)
 }

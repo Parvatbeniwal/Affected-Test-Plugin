@@ -83,15 +83,23 @@ public class CustomUtil {
      * Extracts the method name from a given method signature.
      *
      * @param methodSignature The full method signature.
-     * @return The extracted method name.
+     * @return The extracted method name, or the original signature if parsing fails.
      */
     public static String extractMethodName(String methodSignature) {
+        if (methodSignature == null || methodSignature.isEmpty()) {
+            return methodSignature; // Return the original if it's null or empty
+        }
+
         int startIndex = methodSignature.lastIndexOf('.');
         int lastIndex = methodSignature.indexOf('(');
-        if (startIndex != -1) {
+
+        // Ensure that both '.' and '(' exist in the string and are in the correct order
+        if (startIndex != -1 && lastIndex != -1 && lastIndex > startIndex) {
             return methodSignature.substring(startIndex + 1, lastIndex);
         }
-        return methodSignature;   // Fallback to the whole signature if parsing fails
+
+        // Fallback to the whole signature if parsing fails
+        return methodSignature;
     }
 
     /**
@@ -101,21 +109,28 @@ public class CustomUtil {
      * @return An array of parameter types as strings.
      */
     public static String[] extractParameterTypes(String methodSignature) {
+        // Find the indices of the parameter start and end parentheses
         int startIndex = methodSignature.indexOf('(');
         int endIndex = methodSignature.indexOf(')');
-        if (startIndex == -1 || endIndex == -1) {
-            return new String[0];  // Fallback to no parameters if parsing fails
+
+        // Return an empty array if parentheses are not found
+        if (startIndex == -1 || endIndex == -1 || startIndex >= endIndex) {
+            return new String[0];
         }
 
+        // Extract the parameters substring
         String params = methodSignature.substring(startIndex + 1, endIndex);
+
+        // Return an empty array if there are no parameters
         if (params.isEmpty()) {
-            return new String[0];  // No parameters
+            return new String[0];
         }
 
         List<String> paramList = new ArrayList<>();
         StringBuilder currentParam = new StringBuilder();
         int angleBracketDepth = 0;
 
+        // Iterate over each character in the parameter substring
         for (char ch : params.toCharArray()) {
             if (ch == '<') {
                 angleBracketDepth++;
@@ -129,10 +144,12 @@ public class CustomUtil {
             currentParam.append(ch);
         }
 
+        // Add the last parameter if not empty
         if (!currentParam.isEmpty()) {
             paramList.add(currentParam.toString().trim());
         }
 
+        // Convert the list to an array and return
         return paramList.toArray(new String[0]);
     }
 
@@ -259,11 +276,22 @@ public class CustomUtil {
      * @param methodSignature The full method signature.
      * @return The extracted class name.
      */
+    /**
+     * Extracts the class name from a given method signature.
+     *
+     * @param methodSignature The full method signature.
+     * @return The extracted class name, or an empty string if parsing fails.
+     */
     public static String extractClassName(String methodSignature) {
+        if (methodSignature == null || methodSignature.isEmpty()) {
+            return ""; // Return an empty string if the input is null or empty
+        }
+
         int lastDotIndex = methodSignature.lastIndexOf('.');
         if (lastDotIndex != -1) {
             return methodSignature.substring(0, lastDotIndex);
         }
-        return "";
+        return ""; // Return an empty string if there's no dot in the signature
     }
+
 }

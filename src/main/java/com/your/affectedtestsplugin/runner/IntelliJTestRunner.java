@@ -34,7 +34,8 @@ import java.util.concurrent.CountDownLatch;
  */
 public class IntelliJTestRunner {
     private static final Logger logger = Logger.getInstance(IntelliJTestRunner.class);
-    public static final LinkedHashSet<String> TEST_PATTERNS=new LinkedHashSet<>();
+    public static final LinkedHashSet<String> TEST_PATTERNS = new LinkedHashSet<>();
+
     /**
      * Runs the specified set of JUnit test methods within the given IntelliJ project.
      *
@@ -43,7 +44,7 @@ public class IntelliJTestRunner {
      * @param latch       The CountDownLatch to synchronize the test run completion.
      */
     public void runTests(Project project, Set<PsiMethod> testMethods, CountDownLatch latch) {
-        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationNoChange");
+        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods, "AffectedTestConfigurationNoChange");
         ExecutionEnvironment environment = buildExecutionEnvironment(settings, latch);
         ApplicationManager.getApplication().invokeLater(() -> startingRunProfile(project, environment, latch));
     }
@@ -55,7 +56,7 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to be run.
      */
     public void runTestsForPrevious(Project project, Set<PsiMethod> testMethods) {
-        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods,"AffectedTestConfigurationChanges");
+        RunnerAndConfigurationSettings settings = createTestConfiguration(project, testMethods, "AffectedTestConfigurationChanges");
         ExecutionUtil.runConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance());
     }
 
@@ -66,20 +67,21 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to be included in the configuration.
      * @return The created RunnerAndConfigurationSettings.
      */
-    private RunnerAndConfigurationSettings createTestConfiguration(Project project, Set<PsiMethod> testMethods,String configName) {
+    private RunnerAndConfigurationSettings createTestConfiguration(Project project, Set<PsiMethod> testMethods, String configName) {
         final RunManager runManager = RunManager.getInstance(project);
         final ConfigurationType junitConfigType = ConfigurationTypeUtil.findConfigurationType(JUnitConfigurationType.class);
-        ConfigurationFactory junitConfigFactory=null;
-        try{
+        ConfigurationFactory junitConfigFactory = null;
+        try {
             junitConfigFactory = junitConfigType.getConfigurationFactories()[0];
-        }catch(NullPointerException e){
-            logger.info("Null pointer exception raised by junitConfiguration: "+ e.getMessage());
+        } catch (Exception e) {
+            logger.info("Null pointer exception raised by junitConfiguration: " + e.getMessage());
         }
 
         final RunnerAndConfigurationSettings settings = runManager.createConfiguration(configName, Objects.requireNonNull(junitConfigFactory));
         final JUnitConfiguration configuration = (JUnitConfiguration) settings.getConfiguration();
 
         ApplicationManager.getApplication().runReadAction(() -> setupTestConfigurationData(configuration, testMethods));
+
         configuration.setWorkingDirectory(project.getBasePath());
 
         runManager.addConfiguration(settings);
@@ -108,7 +110,7 @@ public class IntelliJTestRunner {
      * @param testMethods The set of test methods to collect patterns from.
      */
     private void collectMethodPatterns(Set<PsiMethod> testMethods) {
-        if(!TEST_PATTERNS.isEmpty()) {
+        if (!TEST_PATTERNS.isEmpty()) {
             return;
         }
 
@@ -117,6 +119,11 @@ public class IntelliJTestRunner {
             if (psiClass == null) {
                 continue;
             }
+            // Skip methods from classes that match a certain pattern or extend a specific superclass
+            if (isExcludedClass(psiClass)) {
+                continue;
+            }
+
             final String className = psiClass.getQualifiedName();
             final String methodName = method.getName();
             if (className != null) {
@@ -176,5 +183,28 @@ public class IntelliJTestRunner {
             logger.info(e.getMessage());
             throw new RuntimeException(e);
         }
+    }
+
+    private boolean isExcludedClass(PsiClass psiClass) {
+        String className = psiClass.getQualifiedName();
+        if (className != null && className.contains("AbstractJUnit4SpringContextTests")) {
+            return true;
+        }
+
+        return isSubclassOf(psiClass, "org.springframework.test.context.junit4.AbstractJUnit4SpringContextTests");
+    }
+
+    private boolean isSubclassOf(PsiClass psiClass, String superClassName) {
+        if (psiClass == null) {
+            return false;
+        }
+
+        // Traverse the class hierarchy
+        for (PsiClass superClass = psiClass.getSuperClass(); superClass != null; superClass = superClass.getSuperClass()) {
+            if (superClassName.equals(superClass.getQualifiedName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

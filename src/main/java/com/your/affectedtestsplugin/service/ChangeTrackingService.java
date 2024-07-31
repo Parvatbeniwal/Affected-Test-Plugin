@@ -19,6 +19,8 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.your.affectedtestsplugin.helperandutils.CustomUtil;
 import com.your.affectedtestsplugin.helperandutils.PrivateMethodUsageFinder;
 import com.your.affectedtestsplugin.runner.IntelliJTestRunner;
+import kotlinx.coroutines.CoroutineScope;
+import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.ObjectId;
@@ -61,7 +63,12 @@ public final class ChangeTrackingService {
      */
     public ChangeTrackingService(Project project) {
         this.project = project;
-        this.runner=new IntelliJTestRunner();
+        this.runner = new IntelliJTestRunner();
+    }
+
+    public ChangeTrackingService(Project project, CoroutineScope scope) {
+        this.project = project;
+        this.runner = new IntelliJTestRunner();
     }
 
     /**
@@ -72,14 +79,12 @@ public final class ChangeTrackingService {
      */
     public synchronized boolean trackChangesAndTests(int maxDepth) {
         final ChangeListManager changeListManager = ChangeListManager.getInstance(project);
-
         // Get the list of local changes
         final @NotNull Collection<Change> changes = changeListManager.getAllChanges();
-
-        if(changes.isEmpty()) {
+        if (changes.isEmpty()) {
             LOG.info("File is null");
-            CustomUtil.showErrorDialog(project,"No file are changed","NO CHANGES RECOGNIZED");
-            return false ;
+            CustomUtil.showErrorDialog(project, "No file are changed", "NO CHANGES RECOGNIZED");
+            return false;
         }
 
         // Iterate over changes and process them
@@ -92,31 +97,30 @@ public final class ChangeTrackingService {
             }
         }
 
-        CustomUtil.displayFlow(project,"Changed Methods",CHANGES,null);
+        CustomUtil.displayFlow(project, "Changed Methods", CHANGES, null);
         //DFS Traversal to get Usages
         findMethodUsages(maxDepth);
 
         //Getting the affected methods
         gettingAffectedTests();
-        if(ALL_AFFECTED_TESTS.isEmpty()) {
+        if (ALL_AFFECTED_TESTS.isEmpty()) {
             LOG.info("No Tests Affected");
-            CustomUtil.showErrorDialog(project,"No Tests are affected","NO TESTS RECOGNIZED");
+            CustomUtil.showErrorDialog(project, "No Tests are affected", "NO TESTS RECOGNIZED");
             return false;
         }
 
         //clearing unwanted cache
         clearCache();
-
         return true;
     }
 
     /**
      * Clearing the unwanted cache so that plugin could rerun
      */
-    private void clearCache(){
+    private void clearCache() {
         CHANGES.clear();
         AFFECTED_METHODS.clear();
-        PRIVATE_METHODS.clear();
+        //PRIVATE_METHODS.clear();
         PUBLIC_METHOD_TESTS.clear();
     }
 
@@ -431,18 +435,24 @@ public final class ChangeTrackingService {
         GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
         PsiShortNamesCache shortNamesCache = PsiShortNamesCache.getInstance(project);
 
-        String methodName = CustomUtil.extractMethodName(callingMethod);
         String changeClass = CustomUtil.extractClassName(callingMethod);
+        if (StringUtils.isBlank(changeClass)) {
+            return;
+        }
+        String methodName = CustomUtil.extractMethodName(callingMethod);
+        if (StringUtils.isBlank(methodName)) {
+            return;
+        }
         String[] parameterTypes = CustomUtil.extractParameterTypes(callingMethod);
-        PsiClass[] psiClasses = shortNamesCache.getClassesByName(changeClass,scope);
+        PsiClass[] psiClasses = shortNamesCache.getClassesByName(changeClass, scope);
 
-        for(PsiClass psiClass:psiClasses){
-            PsiMethod[] methods=psiClass.getAllMethods();
-            for(PsiMethod method:methods){
-                String className= Objects.requireNonNull(method.getContainingClass()).getName();
+        for (PsiClass psiClass : psiClasses) {
+            PsiMethod[] methods = psiClass.getAllMethods();
+            for (PsiMethod method : methods) {
+                String className = Objects.requireNonNull(method.getContainingClass()).getName();
                 if (method.getName().equals(methodName) && CustomUtil.isMatchingParameters(method, parameterTypes)) {
                     addMethodToRelevantSets(method);
-                    gettingReferences(method,scope,className,maxDepth,currentDepth,currentPath);
+                    gettingReferences(method, scope, className, maxDepth, currentDepth, currentPath);
                 }
             }
         }
@@ -453,21 +463,42 @@ public final class ChangeTrackingService {
     /**
      * Getting the Usages of the method in a collection and traversing it.
      *
-     * @param method        The method whose references are checked
-     * @param scope         The scope of searching
-     * @param className     The name of the class containing the method.
-     * @param maxDepth      The maximum depth for the search.
-     * @param currentDepth  The current depth of the search.
-     * @param currentPath   The current path of visited methods to detect cycles.
+     * @param method       The method whose references are checked
+     * @param scope        The scope of searching
+     * @param className    The name of the class containing the method.
+     * @param maxDepth     The maximum depth for the search.
+     * @param currentDepth The current depth of the search.
+     * @param currentPath  The current path of visited methods to detect cycles.
      */
-    private void gettingReferences(PsiMethod method,GlobalSearchScope scope,
-                                   String className, int maxDepth, int currentDepth, Set<String> currentPath){
+    private void gettingReferences(PsiMethod method, GlobalSearchScope scope,
+                                   String className, int maxDepth, int currentDepth, Set<String> currentPath) {
         Collection<PsiReference> references = ReferencesSearch.search(method, scope).findAll();
         for (PsiReference reference : references) {
             handleMethodReference(reference, className, maxDepth, currentDepth, currentPath);
         }
     }
 
+    /**
+     * Handles a method reference by finding the containing method and recursively finding its usages.
+     *
+     * @param reference    The reference to the method.
+     * @param className    The name of the class containing the method.
+     * @param maxDepth     The maximum depth for the search.
+     * @param currentDepth The current depth of the search.
+     * @param currentPath  The current path of visited methods to detect cycles.
+     */
+    private void handleMethodReference(PsiReference reference, String className, int maxDepth, int currentDepth, Set<String> currentPath) {
+        PsiElement element = reference.getElement();
+        String containingClass = CustomUtil.findDeclaringClassName(element);
+        if (containingClass != null && Objects.equals(containingClass, className)) {
+            PsiMethod containingMethod = PsiTreeUtil.getParentOfType(element, PsiMethod.class);
+            if (containingMethod != null) {
+                String methodClass = Objects.requireNonNull(containingMethod.getContainingClass()).getName();
+                String methodSignature = CustomUtil.getMethodSignatureForPsiElement(containingMethod, methodClass);
+                findUsagesForMethod(methodSignature, maxDepth, currentDepth + 1, currentPath);
+            }
+        }
+    }
     /**
      * Determines if the search should stop based on the current depth, maximum depth, and presence of cycles.
      *
@@ -493,33 +524,11 @@ public final class ChangeTrackingService {
      * @param method The method to be added.
      */
     private void addMethodToRelevantSets(PsiMethod method) {
-        if (method.hasModifierProperty(PsiModifier.PRIVATE)) {
+       /* if (method.hasModifierProperty(PsiModifier.PRIVATE)) {
             PRIVATE_METHODS.add(method);
-        }
+        }*/
         if (CustomUtil.isTestMethod(method)) {
             PUBLIC_METHOD_TESTS.add(method);
-        }
-    }
-
-    /**
-     * Handles a method reference by finding the containing method and recursively finding its usages.
-     *
-     * @param reference     The reference to the method.
-     * @param className     The name of the class containing the method.
-     * @param maxDepth      The maximum depth for the search.
-     * @param currentDepth  The current depth of the search.
-     * @param currentPath   The current path of visited methods to detect cycles.
-     */
-    private void handleMethodReference(PsiReference reference, String className, int maxDepth, int currentDepth, Set<String> currentPath) {
-        PsiElement element = reference.getElement();
-        String containingClass = CustomUtil.findDeclaringClassName(element);
-        if (containingClass != null && Objects.equals(containingClass, className)) {
-            PsiMethod containingMethod = PsiTreeUtil.getParentOfType(element, PsiMethod.class);
-            if (containingMethod != null) {
-                String methodClass = Objects.requireNonNull(containingMethod.getContainingClass()).getName();
-                String methodSignature = CustomUtil.getMethodSignatureForPsiElement(containingMethod, methodClass);
-                findUsagesForMethod(methodSignature, maxDepth, currentDepth + 1, currentPath);
-            }
         }
     }
 
@@ -528,20 +537,21 @@ public final class ChangeTrackingService {
      */
     public void gettingAffectedTests() {
         ALL_AFFECTED_TESTS.clear();
-        Set<PsiMethod> privateUsages = PrivateMethodUsageFinder.findPrivateMethodUsages(project, PRIVATE_METHODS);
+        // Set<PsiMethod> privateUsages = PrivateMethodUsageFinder.findPrivateMethodUsages(project, PRIVATE_METHODS);
         ALL_AFFECTED_TESTS.addAll(PUBLIC_METHOD_TESTS);
-        ALL_AFFECTED_TESTS.addAll(privateUsages);
+        // ALL_AFFECTED_TESTS.addAll(privateUsages);
     }
 
     /**
      * Calls for the running tests for the stashed changes file while checking the test availability
+     *
      * @param latch For keeping track of lock
      */
     public void runTestsOnHeadCommitFiles(CountDownLatch latch) {
         if (!ALL_AFFECTED_TESTS.isEmpty()) {
             runner.runTests(project, ALL_AFFECTED_TESTS, latch);
         } else {
-            CustomUtil.showErrorDialog(project,"No test are affected by the changes","No Test affected");
+            CustomUtil.showErrorDialog(project, "No test are affected by the changes", "No Test affected");
         }
     }
 
@@ -552,13 +562,14 @@ public final class ChangeTrackingService {
         if (!ALL_AFFECTED_TESTS.isEmpty()) {
             runner.runTestsForPrevious(project, ALL_AFFECTED_TESTS);
         } else {
-            CustomUtil.showErrorDialog(project,"No test are affected by the changes","No Test affected");
+            CustomUtil.showErrorDialog(project, "No test are affected by the changes", "No Test affected");
         }
     }
 
     /**
      * Method used for stashing the changes and
      * then calling for the running of the affected tests on stashed file
+     *
      * @param latch For keeping track of lock
      */
     public void runTestsOnHeadFiles(CountDownLatch latch) {
@@ -569,7 +580,7 @@ public final class ChangeTrackingService {
             runTestsOnHeadCommitFiles(latch);
         } catch (Exception e) {
             LOG.info(e.getMessage());
-            CustomUtil.showErrorDialog(project,"Error in stashed file running: " + e.getMessage(),"First Run error");
+            CustomUtil.showErrorDialog(project, "Error in stashed file running: " + e.getMessage(), "First Run error");
         }
     }
 }
