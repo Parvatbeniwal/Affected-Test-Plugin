@@ -50,7 +50,7 @@ public class RunChangeTrackingAction extends AnAction {
     private void runChangeDetectionTask(Project project) {
         try {
             final ChangeTrackingService changeTrackingService = project.getService(ChangeTrackingService.class);
-            boolean changedDetected = changeTrackingService.trackChangesAndTests(2);
+            boolean changedDetected = changeTrackingService.trackChangesAndTests(1);
             if (!changedDetected) {
                 return;
             }
