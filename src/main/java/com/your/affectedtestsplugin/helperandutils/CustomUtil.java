@@ -19,7 +19,6 @@ import java.util.Set;
  * Utility class for various operations related to method signatures, class names, and PsiElements.
  */
 public class CustomUtil {
-
     /**
      * Generates the signature of a method declaration given its signature and class name.
      *
@@ -293,5 +292,4 @@ public class CustomUtil {
         }
         return ""; // Return an empty string if there's no dot in the signature
     }
-
 }

@@ -52,7 +52,6 @@ public final class ChangeTrackingService {
     private final Project project;
     private final Set<String> CHANGES = new HashSet<>();
     private final Map<String, Integer> AFFECTED_METHODS = new HashMap<>();
-    private final Set<PsiMethod> PRIVATE_METHODS = new HashSet<>();
     private final Set<PsiMethod> PUBLIC_METHOD_TESTS = new HashSet<>();
     private final Set<PsiMethod> ALL_AFFECTED_TESTS = new HashSet<>();
 
@@ -120,7 +119,6 @@ public final class ChangeTrackingService {
     private void clearCache() {
         CHANGES.clear();
         AFFECTED_METHODS.clear();
-        //PRIVATE_METHODS.clear();
         PUBLIC_METHOD_TESTS.clear();
     }
 
@@ -157,7 +155,8 @@ public final class ChangeTrackingService {
         } catch (IOException | RuntimeException e) {
             String message = e instanceof IOException ? "OLD" : "NEW";
             LOG.info("Cannot get " + message + " file content");
-            return ""; //To handle if a completely new file is added Otherwise put null
+            return "";
+            //To handle if a completely new file is added Otherwise put null
         }
     }
 
@@ -340,8 +339,6 @@ public final class ChangeTrackingService {
                 oldMethodsMap.remove(methodSignature);
             }
         }
-
-        // Add removed methods to changes
         CHANGES.addAll(oldMethodsMap.keySet());
     }
 
@@ -410,49 +407,33 @@ public final class ChangeTrackingService {
      *
      * @param maxDepth The maximum depth for method usage search.
      */
-    private void findMethodUsages(int maxDepth) {
+    public void findMethodUsages(int maxDepth) {
         for (String change : CHANGES) {
             findUsagesForMethod(change, maxDepth, 0, new HashSet<>());
         }
     }
 
-    /**
-     * Recursively finds the usages of a given method up to the specified depth.
-     *
-     * @param callingMethod The method whose usages are to be found.
-     * @param maxDepth      The maximum depth for method usage search.
-     * @param currentDepth  The current depth of the search.
-     * @param currentPath   The set of methods visited in the current path to detect cycles.
-     */
     private void findUsagesForMethod(String callingMethod, int maxDepth, int currentDepth, Set<String> currentPath) {
         if (shouldStopSearch(callingMethod, maxDepth, currentDepth, currentPath)) {
             return;
         }
-
         currentPath.add(callingMethod);
         AFFECTED_METHODS.put(callingMethod, currentDepth);
-
-        GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
-        PsiShortNamesCache shortNamesCache = PsiShortNamesCache.getInstance(project);
-
         String changeClass = CustomUtil.extractClassName(callingMethod);
-        if (StringUtils.isBlank(changeClass)) {
-            return;
-        }
         String methodName = CustomUtil.extractMethodName(callingMethod);
-        if (StringUtils.isBlank(methodName)) {
+        String[] parameterTypes = CustomUtil.extractParameterTypes(callingMethod);
+
+        if (StringUtils.isBlank(changeClass) || StringUtils.isBlank(methodName)) {
             return;
         }
-        String[] parameterTypes = CustomUtil.extractParameterTypes(callingMethod);
-        PsiClass[] psiClasses = shortNamesCache.getClassesByName(changeClass, scope);
 
+        PsiClass[] psiClasses = PsiShortNamesCache.getInstance(project).getClassesByName(changeClass, GlobalSearchScope.projectScope(project));
         for (PsiClass psiClass : psiClasses) {
-            PsiMethod[] methods = psiClass.getAllMethods();
+            PsiMethod[] methods = psiClass.getMethods();
             for (PsiMethod method : methods) {
-                String className = Objects.requireNonNull(method.getContainingClass()).getName();
                 if (method.getName().equals(methodName) && CustomUtil.isMatchingParameters(method, parameterTypes)) {
                     addMethodToRelevantSets(method);
-                    gettingReferences(method, scope, className, maxDepth, currentDepth, currentPath);
+                    gettingReferences(method, GlobalSearchScope.projectScope(project), changeClass, maxDepth, currentDepth, currentPath);
                 }
             }
         }
@@ -509,13 +490,7 @@ public final class ChangeTrackingService {
      * @return True if the search should stop, false otherwise.
      */
     private boolean shouldStopSearch(String callingMethod, int maxDepth, int currentDepth, Set<String> currentPath) {
-        if (currentDepth > maxDepth) {
-            return true;
-        }
-        if (currentPath.contains(callingMethod)) {
-            return true;
-        }
-        return AFFECTED_METHODS.containsKey(callingMethod) && AFFECTED_METHODS.get(callingMethod) <= currentDepth;
+        return currentDepth > maxDepth || currentPath.contains(callingMethod) || AFFECTED_METHODS.containsKey(callingMethod) && AFFECTED_METHODS.get(callingMethod) <= currentDepth;
     }
 
     /**
@@ -524,9 +499,6 @@ public final class ChangeTrackingService {
      * @param method The method to be added.
      */
     private void addMethodToRelevantSets(PsiMethod method) {
-       /* if (method.hasModifierProperty(PsiModifier.PRIVATE)) {
-            PRIVATE_METHODS.add(method);
-        }*/
         if (CustomUtil.isTestMethod(method)) {
             PUBLIC_METHOD_TESTS.add(method);
         }
@@ -537,9 +509,7 @@ public final class ChangeTrackingService {
      */
     public void gettingAffectedTests() {
         ALL_AFFECTED_TESTS.clear();
-        // Set<PsiMethod> privateUsages = PrivateMethodUsageFinder.findPrivateMethodUsages(project, PRIVATE_METHODS);
         ALL_AFFECTED_TESTS.addAll(PUBLIC_METHOD_TESTS);
-        // ALL_AFFECTED_TESTS.addAll(privateUsages);
     }
 
     /**
@@ -563,24 +533,6 @@ public final class ChangeTrackingService {
             runner.runTestsForPrevious(project, ALL_AFFECTED_TESTS);
         } else {
             CustomUtil.showErrorDialog(project, "No test are affected by the changes", "No Test affected");
-        }
-    }
-
-    /**
-     * Method used for stashing the changes and
-     * then calling for the running of the affected tests on stashed file
-     *
-     * @param latch For keeping track of lock
-     */
-    public void runTestsOnHeadFiles(CountDownLatch latch) {
-        try (Git git = Git.open(new File(Objects.requireNonNull(project.getBasePath())))) {
-            //Stashing changes
-            git.stashCreate().call();
-            // Run tests on HEAD commit files
-            runTestsOnHeadCommitFiles(latch);
-        } catch (Exception e) {
-            LOG.info(e.getMessage());
-            CustomUtil.showErrorDialog(project, "Error in stashed file running: " + e.getMessage(), "First Run error");
         }
     }
 }
